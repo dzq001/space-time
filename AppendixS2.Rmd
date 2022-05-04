@@ -1,0 +1,428 @@
+---
+title: ''
+author: ''
+output:
+  pdf_document: default
+  word_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+**Supporting Information.** Zhangqi Ding, et.al. 2022. Synthetically identify of space-time scale variations are needed in ecology research. Ecology.
+
+**Appendix S2 Application and Robust test of space-time scale**
+
+**R version 4.1.2**
+
+**1.Application and test of space-time scale**
+
+The composition and structure of ecological objects are diverse and changeable, rather than simple and stable. In the previous example, we simulated the data stratification phenomenon along the time dimension. In order to further test whether this method can distinguish the non-stationary changes of the research object on a particular space-time scale, we put the four types of simulated time and space scale combinations (short-time, small-space scale; short-time, large-space scale; long-time, small-space scale; and long-time, large-space scale) into one dataset for testing at the same time. Along the time gradient, there are changes from the short-time scale to the long-time scale, and the space scale changes from small to large along the spatial gradient as well.
+
+Following figures show the simulated 400×600 spatial-temporal dynamic structure that is formed by the cross mixing of small- and large-scale features in both dimensions. 
+
+```{r, echo=FALSE, fig.width=8, fig.height=10, out.width='50%'}
+# To save computing time, we use multi-core.
+library(doParallel, quietly = TRUE) ; library(devtools, quietly = TRUE)
+cl <- makeCluster(detectCores()-1) ; registerDoParallel(cl)
+source("https://raw.githubusercontent.com/dzq001/space-time/main/wavelet-tool.R")
+pal <- colorRampPalette(c('#003366', "#0072B2", "#56B4E9", '#FFFFFF',
+                          "#E69F00", "#D55E00", '#CC3300'), bias=1)(n=200)
+# Figure s1-a
+times <- 1:600; spaces <- 1:400
+set.seed(1234)
+raw.mat1 <- raw.mat11 <- matrix(NA, nrow = length(spaces), ncol=length(times))
+raw.mat2 <- raw.mat22 <- matrix(NA, nrow = length(times), ncol=length(times))
+for(j in 1:(length(times))){
+  raw.mat1[,j] <- sin(10*pi*seq(0,2,length.out = length(spaces))+ 
+                        circular::rvonmises(length(spaces), circular::circular(0), 5))
+  raw.mat11[,j] <- sin(40*pi*seq(0,2,length.out = length(spaces))+ 
+                         circular::rvonmises(length(spaces), circular::circular(0), 5))
+  raw.mat2[j,] <- sin(10*pi*seq(0,2,length.out = length(times))+ 
+                        circular::rvonmises(length(times), circular::circular(0), 5))
+  raw.mat22[j,] <- sin(40*pi*seq(0,2,length.out = length(times))+ 
+                         circular::rvonmises(length(times), circular::circular(0), 5))
+}
+data.mat <- rbind( cbind((raw.mat11[1:200,1:300] + raw.mat22[1:200,1:300]) , 
+                         (raw.mat11[1:200,301:600] + raw.mat2[1:200,301:600]) ),
+                   cbind((raw.mat1[201:400,1:300] + raw.mat22[201:400,1:300]) , 
+                         (raw.mat1[201:400,301:600] + raw.mat2[201:400,301:600]) ) )
+#
+w.time <- multi.wt(times, t(data.mat)) ; w.space <- multi.wt(spaces, data.mat)
+b.time <- colSums(abs(apply(w.time$z, c(1, 2), sum)))/
+  colSums(apply(abs(w.time$z), c(1, 2), sum))
+b.space <- colSums(abs(apply(w.space$z, c(1, 2), sum)))/
+  colSums(apply(abs(w.space$z), c(1, 2), sum))
+mat <- outer((b.space), (b.time), '*')
+#
+par(mar=c(4, 4.3, 2, 0.75), fig=c(0, 1, 0.4, 1))
+image(1:600, 1:400, t(data.mat), col = pal, xlab = '', ylab = '', axes = F)
+box(col = 'black')
+title(xlab = 'Time', ylab = 'Space', cex.lab = 1.5, font = 2, line = 2.5)
+axis(1,  c(1, 100, 200, 300, 400, 500, 600) ) ; axis(2, c(1, 100, 200, 300, 400), las = 2)
+
+par(mar=c(4, 1, 1.5, 0.75), fig=c(0, 0.2, 0, 0.4), new = T)
+plot(b.time, w.time$y, log = 'y', type = 'l', lwd = 2, 
+     yaxs = 'i',xaxs = 'i', xlim = c(0,1), xlab = '', ylab = '', axes = F)
+axis(1, c(0, 0.5, 1), labels = Vectorize(formatC)(c(0.0,0.5,1.0), digits=c(0,1,0)) )
+title(xlab = expression(b[Time]), ylab = '', cex.lab = 1.5, font = 2, line = 3)
+
+par(mar=c(4, 1, 1.5, 0.75), fig=c(0.2, 0.4, 0, 0.4), new = T)
+plot(b.space, w.space$y, log = 'y', type = 'l', lwd = 2,
+     yaxs = 'i',xaxs = 'i', xlim = c(0,1), xlab = '', ylab = '', axes = F)
+axis(1, c(0, 0.5, 1), labels = Vectorize(formatC)(c(0.0,0.5,1.0), digits=c(0,1,0)) )
+title(xlab = expression(b[Space]), ylab = '', cex.lab = 1.5, font = 2, line = 3)
+
+par(mar=c(4, 4.5, 1.5, 0.75), fig=c(0.4, 1, 0, 0.4), new = T)
+image(w.time$y, w.space$y, t(mat), xlab = '', ylab = '', col = pal, log = 'xy', axes = F)
+box(col = 'black')
+axis(1, c(2, 5, 15, 60, 240) ) ; axis(2, c(2, 10, 40, 160), las = 2)
+title(xlab = expression(b[Time]), ylab = expression(b[Space]), cex.lab = 1.5, font = 2, line = 2.5)
+# 
+mat.t1 <- mat.t2 <- mat.s1 <- mat.s2 <- matrix(NA, length(spaces), length(times) )
+for(i in 1:dim(w.time$z)[3]){  mat.t1[i, ] <- w.time$z[, 241, i] ; mat.t2[i, ] <- w.time$z[, 408, i] }
+for(i in 1:dim(w.space$z)[3]){  mat.s1[, i] <- w.space$z[, 140, i] ; mat.s2[, i] <- w.space$z[, 261, i] }
+par(mfcol = c(2, 2), mar = c(4, 4, 3, 0.75))
+image(times, spaces, sqrt(Mod(t(mat.t1))*Mod(t(mat.s2))), 
+      xlab = '', ylab = '', col = pal, axes = F); box(col = 'black')
+axis(1,  c(1, 100, 200, 300, 400, 500, 600) ) ; axis(2, c(1, 100, 200, 300, 400), las = 2)
+title(xlab = 'Time', ylab = 'Space', cex.lab = 1.2, font = 2, line = 2.5)
+title(main = 'Short time scale and large space scale', font = 2, line = 0.6)
+image(times, spaces, sqrt(Mod(t(mat.t1))*Mod(t(mat.s1))), 
+      xlab = '', ylab = '', col = pal, axes = F); box(col = 'black')
+axis(1,  c(1, 100, 200, 300, 400, 500, 600) ) ; axis(2, c(1, 100, 200, 300, 400), las = 2)
+title(xlab = 'Time', ylab = 'Space', cex.lab = 1.2, font = 2, line = 2.5)
+title(main = 'Short time scale and small space scale', font = 2, line = 0.6)
+image(times, spaces, sqrt(Mod(t(mat.t2))*Mod(t(mat.s2))), 
+      xlab = '', ylab = '', col = pal, axes = F); box(col = 'black')
+axis(1,  c(1, 100, 200, 300, 400, 500, 600) ) ; axis(2, c(1, 100, 200, 300, 400), las = 2)
+title(xlab = 'Time', ylab = 'Space', cex.lab = 1.2, font = 2, line = 2.5)
+title(main = 'Long time scale and large space scale', font = 2, line = 0.6)
+image(times, spaces, sqrt(Mod(t(mat.t2))*Mod(t(mat.s1))), 
+      xlab = '', ylab = '', col = pal, axes = F); box(col = 'black')
+axis(1,  c(1, 100, 200, 300, 400, 500, 600) ) ; axis(2, c(1, 100, 200, 300, 400), las = 2)
+title(xlab = 'Time', ylab = 'Space', cex.lab = 1.2, font = 2, line = 2.5)
+title(main = 'Long time scale and small space scale', font = 2, line = 0.6)
+```
+
+The test results demonstrate that the synthetically analysis of time and space scales can well excavate the intrinsic scale of the structure and show the simulated structure on the corresponding scale.
+
+\newpage
+Following figures show the simulated 400×600 spatial-temporal dynamic structure, and the mix of small-scale asynchronous and large-scale synchronous changes that exist in both dimensions.
+
+```{r, echo=FALSE, fig.width=8, fig.height=10, out.width='50%'}
+times <- 1:600; spaces <- 1:400
+set.seed(1234)
+raw.mat1 <- raw.mat11 <- matrix(NA, nrow = length(spaces), ncol=length(times))
+raw.mat2 <- raw.mat22 <- raw.mat3 <- matrix(NA, nrow = length(times), ncol = length(times))
+for(j in 1:(length(times))){
+  raw.mat1[, j] <- sin(10*pi*seq(0, 2, length.out = length(spaces))+ 
+                         circular::rvonmises(length(spaces), circular::circular(0), 20))
+  raw.mat11[, j[j%%2==0]] <- sin(40*pi*seq(0, 2, length.out = length(spaces))+ 
+                                   circular::rvonmises(length(spaces), circular::circular(0), 20))
+  raw.mat11[, j[j%%2==1]] <- sin(40*pi*seq(0, 2, length.out = length(spaces))+ 
+                                   circular::rvonmises(length(spaces), circular::circular(pi), 20))
+  raw.mat2[j, ] <- sin(10*pi*seq(0, 2, length.out = length(times))+ 
+                         circular::rvonmises(length(times), circular::circular(0), 20))
+  raw.mat22[j[j%%2==0], ] <- sin(40*pi*seq(0, 2, length.out = length(times))+ 
+                                   circular::rvonmises(length(times), circular::circular(0), 20))
+  raw.mat22[j[j%%2==1], ] <- sin(40*pi*seq(0, 2, length.out = length(times))+ 
+                                   circular::rvonmises(length(times), circular::circular(pi), 20))
+  raw.mat3[j, ] <- cos(circular::rvonmises(length(times), 
+                                           circular::circular(sample(0:360, 1)*pi/180), 5))
+}
+data.mat <- rbind( cbind((6*raw.mat11[1:200, 1:300] + 6*raw.mat22[1:200, 1:300]) , 
+                         (6*raw.mat11[1:200, 301:600] + raw.mat2[1:200, 301:600]) ),
+                   cbind((raw.mat1[201:400, 1:300] + 6*raw.mat22[201:400, 1:300]) , 
+                         (raw.mat1[201:400, 301:600] + raw.mat2[201:400, 301:600]) ) ) +
+  raw.mat3[1:length(spaces), 1:length(times)] + t(raw.mat3[1:length(times), 1:length(spaces)])
+
+w.time <- multi.wt(times, t(data.mat)) ; w.space <- multi.wt(spaces, data.mat)
+b.time <- colSums(abs(apply(w.time$z, c(1, 2), sum))) / 
+  colSums(apply(abs(w.time$z), c(1, 2), sum))
+b.space <- colSums(abs(apply(w.space$z, c(1, 2), sum))) / 
+  colSums(apply(abs(w.space$z), c(1, 2), sum))
+mat <- outer(maxmin(b.space), maxmin(b.time), '*')
+#
+par(mar=c(4, 4.3, 2, 0.75), fig=c(0, 1, 0.4, 1))
+image(1:600, 1:400, t(data.mat), col = pal, xlab = '', ylab = '', axes = F)
+box(col = 'black')
+title(xlab = 'Time', ylab = 'Space', cex.lab = 1.5, font = 2, line = 2.5)
+axis(1,  c(1, 100, 200, 300, 400, 500, 600) ) ; axis(2, c(1, 100, 200, 300, 400), las = 2)
+
+par(mar=c(4, 1, 1.5, 0.75), fig=c(0, 0.2, 0, 0.4), new = T)
+plot(b.time, w.time$y, log = 'y', type = 'l', lwd = 2, 
+     yaxs = 'i',xaxs = 'i', xlim = c(0,1), xlab = '', ylab = '', axes = F)
+axis(1, c(0, 0.5, 1), labels = Vectorize(formatC)(c(0.0,0.5,1.0), digits=c(0,1,0)) )
+title(xlab = expression(b[Time]), ylab = '', cex.lab = 1.5, font = 2, line = 3)
+
+par(mar=c(4, 1, 1.5, 0.75), fig=c(0.2, 0.4, 0, 0.4), new = T)
+plot(b.space, w.space$y, log = 'y', type = 'l', lwd = 2,
+     yaxs = 'i',xaxs = 'i', xlim = c(0,1), xlab = '', ylab = '', axes = F)
+axis(1, c(0, 0.5, 1), labels = Vectorize(formatC)(c(0.0,0.5,1.0), digits=c(0,1,0)) )
+title(xlab = expression(b[Space]), ylab = '', cex.lab = 1.5, font = 2, line = 3)
+
+par(mar=c(4, 4.5, 1.5, 0.75), fig=c(0.4, 1, 0, 0.4), new = T)
+image(w.time$y, w.space$y, t(mat), xlab = '', ylab = '', col = pal, log = 'xy', axes = F)
+box(col = 'black')
+axis(1, c(2, 5, 15, 60, 240) ) ; axis(2, c(2, 10, 40, 160), las = 2)
+title(xlab = expression(b[Time]), ylab = expression(b[Space]), cex.lab = 1.5, font = 2, line = 2.5)
+#
+mat.t1 <- mat.t2 <- mat.s1 <- mat.s2 <- matrix(NA, length(spaces), length(times) )
+for(i in 1:dim(w.time$z)[3]){  mat.t1[i, ] <- w.time$z[, 241, i] ; mat.t2[i, ] <- w.time$z[, 408, i] }
+for(i in 1:dim(w.space$z)[3]){  mat.s1[, i] <- w.space$z[, 140, i] ; mat.s2[, i] <- w.space$z[, 261, i] }
+par(mfcol = c(2, 2), mar = c(4, 4, 3, 0.75))
+image(times, spaces, sqrt(Mod(t(mat.t1))*Mod(t(mat.s2))), 
+      xlab = '', ylab = '', col = pal, axes = F); box(col = 'black')
+axis(1,  c(1, 100, 200, 300, 400, 500, 600) ) ; axis(2, c(1, 100, 200, 300, 400), las = 2)
+title(xlab = 'Time', ylab = 'Space', cex.lab = 1.2, font = 2, line = 2.5)
+title(main = 'Short time scale and large space scale', font = 2, line = 0.6)
+image(times, spaces, sqrt(Mod(t(mat.t1))*Mod(t(mat.s1))), 
+      xlab = '', ylab = '', col = pal, axes = F); box(col = 'black')
+axis(1,  c(1, 100, 200, 300, 400, 500, 600) ) ; axis(2, c(1, 100, 200, 300, 400), las = 2)
+title(xlab = 'Time', ylab = 'Space', cex.lab = 1.2, font = 2, line = 2.5)
+title(main = 'Short time scale and small space scale', font = 2, line = 0.6)
+image(times, spaces, sqrt(Mod(t(mat.t2))*Mod(t(mat.s2))), 
+      xlab = '', ylab = '', col = pal, axes = F); box(col = 'black')
+axis(1,  c(1, 100, 200, 300, 400, 500, 600) ) ; axis(2, c(1, 100, 200, 300, 400), las = 2)
+title(xlab = 'Time', ylab = 'Space', cex.lab = 1.2, font = 2, line = 2.5)
+title(main = 'Long time scale and large space scale', font = 2, line = 0.6)
+image(times, spaces, sqrt(Mod(t(mat.t2))*Mod(t(mat.s1))), 
+      xlab = '', ylab = '', col = pal, axes = F); box(col = 'black')
+axis(1,  c(1, 100, 200, 300, 400, 500, 600) ) ; axis(2, c(1, 100, 200, 300, 400), las = 2)
+title(xlab = 'Time', ylab = 'Space', cex.lab = 1.2, font = 2, line = 2.5)
+title(main = 'Long time scale and small space scale', font = 2, line = 0.6)
+```
+
+As for the synchronicity of the spatial-temporal dynamics that have received increasing attention, the test results show that the synthetically analysis of time and space scales can reveal both the intrinsic space-time scale of the dynamic structure and the simulated features on the corresponding scale. However, it should be noted that due to the synchrony on a long-time and large spatial scale, and the asynchrony of a short-time and small-spatial scale, there is obviously some spatial-temporal asynchrony on the short-time, large-space scale and the long-time, small-space scale combinations.
+
+\newpage
+The space-time scale changes (M~B~) of the simulated structural (a) and synchrony (b) characteristics calculated by the wavelet mean field.
+
+```{r, echo=FALSE, fig.width=10, fig.height=8, out.width='50%'}
+times <- 1:600; spaces <- 1:400
+set.seed(1234)
+raw.mat1 <- raw.mat11 <- matrix(NA, nrow = length(spaces), ncol=length(times))
+raw.mat2 <- raw.mat22 <- matrix(NA, nrow = length(times), ncol=length(times))
+for(j in 1:(length(times))){
+  raw.mat1[,j] <- sin(10*pi*seq(0,2,length.out = length(spaces))+ 
+                        circular::rvonmises(length(spaces), circular::circular(0), 5))
+  raw.mat11[,j] <- sin(40*pi*seq(0,2,length.out = length(spaces))+ 
+                         circular::rvonmises(length(spaces), circular::circular(0), 5))
+  raw.mat2[j,] <- sin(10*pi*seq(0,2,length.out = length(times))+ 
+                        circular::rvonmises(length(times), circular::circular(0), 5))
+  raw.mat22[j,] <- sin(40*pi*seq(0,2,length.out = length(times))+ 
+                         circular::rvonmises(length(times), circular::circular(0), 5))
+}
+data.mat <- rbind( cbind((raw.mat11[1:200,1:300] + raw.mat22[1:200,1:300]) , 
+                         (raw.mat11[1:200,301:600] + raw.mat2[1:200,301:600]) ),
+                   cbind((raw.mat1[201:400,1:300] + raw.mat22[201:400,1:300]) , 
+                         (raw.mat1[201:400,301:600] + raw.mat2[201:400,301:600]) ) )
+#
+w.time <- multi.wt(times, t(data.mat)) ; w.space <- multi.wt(spaces, data.mat)
+#
+Mb.time <- mb.com(w.time, 'wmf') ; Mb.space <- mb.com(w.space, 'wmf')
+b.time <- colMeans(Mb.time) ; b.space <- colMeans(Mb.space)
+mat <- outer((b.space), (b.time), '*')
+par(mar=c(4,4.5,1.5,0.75))
+image(w.time$y, w.space$y, t(mat), xlab = '', ylab = '', col=pal, log='xy', axes = F); box(col='black')
+axis(1, c(2,5,15,60,240) ) ; axis(2, c(2,10,40,160), las = 2)
+title(xlab = expression(b[Time]), ylab = expression(b[Space]), cex.lab = 1.5, font = 2, line = 2.5)
+mtext('(a)',cex = 1.5, font = 2, line = 0.5, adj = -0.1)
+###
+times <- 1:600; spaces <- 1:400
+set.seed(1234)
+raw.mat1 <- raw.mat11 <- matrix(NA, nrow = length(spaces), ncol=length(times))
+raw.mat2 <- raw.mat22 <- raw.mat3 <- matrix(NA, nrow = length(times), ncol = length(times))
+for(j in 1:(length(times))){
+  raw.mat1[, j] <- sin(10*pi*seq(0, 2, length.out = length(spaces))+ 
+                         circular::rvonmises(length(spaces), circular::circular(0), 20))
+  raw.mat11[, j[j%%2==0]] <- sin(40*pi*seq(0, 2, length.out = length(spaces))+ 
+                                   circular::rvonmises(length(spaces), circular::circular(0), 20))
+  raw.mat11[, j[j%%2==1]] <- sin(40*pi*seq(0, 2, length.out = length(spaces))+ 
+                                   circular::rvonmises(length(spaces), circular::circular(pi), 20))
+  raw.mat2[j, ] <- sin(10*pi*seq(0, 2, length.out = length(times))+ 
+                         circular::rvonmises(length(times), circular::circular(0), 20))
+  raw.mat22[j[j%%2==0], ] <- sin(40*pi*seq(0, 2, length.out = length(times))+ 
+                                   circular::rvonmises(length(times), circular::circular(0), 20))
+  raw.mat22[j[j%%2==1], ] <- sin(40*pi*seq(0, 2, length.out = length(times))+ 
+                                   circular::rvonmises(length(times), circular::circular(pi), 20))
+  raw.mat3[j, ] <- cos(circular::rvonmises(length(times), 
+                                           circular::circular(sample(0:360, 1)*pi/180), 5))
+}
+data.mat <- rbind( cbind((6*raw.mat11[1:200, 1:300] + 6*raw.mat22[1:200, 1:300]) , 
+                         (6*raw.mat11[1:200, 301:600] + raw.mat2[1:200, 301:600]) ),
+                   cbind((raw.mat1[201:400, 1:300] + 6*raw.mat22[201:400, 1:300]) , 
+                         (raw.mat1[201:400, 301:600] + raw.mat2[201:400, 301:600]) ) ) +
+  raw.mat3[1:length(spaces), 1:length(times)] + t(raw.mat3[1:length(times), 1:length(spaces)])
+
+w.time <- multi.wt(times, t(data.mat)) ; w.space <- multi.wt(spaces, data.mat)
+#
+Mb.time <- mb.com(w.time, 'wmf') ; Mb.space <- mb.com(w.space, 'wmf')
+b.time <- colMeans(Mb.time) ; b.space <- colMeans(Mb.space)
+maxmin <- function(x){(2*x-(max(x)+min(x)))/(max(x)-min(x))}
+mat <- maxmin(b.space)%o% maxmin(b.time)
+par(mar=c(4,4.5,1.5,0.75))
+image(w.time$y, w.space$y, t(mat), xlab = '', ylab = '', col=pal, log='xy', axes = F); box(col='black')
+axis(1, c(2,5,15,60,240) ) ; axis(2, c(2,10,40,160), las = 2)
+title(xlab = expression(b[Time]), ylab = expression(b[Space]), cex.lab = 1.5, font = 2, line = 2.5)
+mtext('(b)',cex = 1.5, font = 2, line = 0.5, adj = -0.1)
+```
+
+\newpage
+**2.Robust test**
+
+```{r, echo=FALSE, fig.width=8, fig.height=10, out.width='70%'}
+times<-1:600; spaces <- 1:400
+set.seed(1234)
+raw.mat1 <- raw.mat11 <- matrix(NA, nrow = length(spaces), ncol=length(times))
+raw.mat2 <- raw.mat22 <- matrix(NA, nrow = length(times), ncol=length(times))
+for(j in 1:(length(times))){
+  raw.mat1[,j] <- sin(10*pi*seq(0,2,length.out = length(spaces))+ 
+                        circular::rvonmises(length(spaces), circular::circular(0), 5))
+  raw.mat11[,j] <- sin(40*pi*seq(0,2,length.out = length(spaces))+ 
+                         circular::rvonmises(length(spaces), circular::circular(0), 5))
+  raw.mat2[j,] <- sin(10*pi*seq(0,2,length.out = length(times))+ 
+                        circular::rvonmises(length(times), circular::circular(0), 5))
+  raw.mat22[j,] <- sin(40*pi*seq(0,2,length.out = length(times))+ 
+                         circular::rvonmises(length(times), circular::circular(0), 5))
+}
+data.mat <- sign(rbind( cbind((raw.mat11[1:200,1:300] + raw.mat22[1:200,1:300]) , 
+                              (raw.mat11[1:200,301:600] + raw.mat2[1:200,301:600]) ),
+                   cbind((raw.mat1[201:400,1:300] + raw.mat22[201:400,1:300]) , 
+                         (raw.mat1[201:400,301:600] + raw.mat2[201:400,301:600]) ) ))
+#
+w.time <- multi.wt(times, t(data.mat)) ; w.space <- multi.wt(spaces, data.mat)
+b.time <- colSums(abs(apply(w.time$z, c(1, 2), sum)))/colSums(apply(abs(w.time$z), c(1, 2), sum))
+b.space <- colSums(abs(apply(w.space$z, c(1, 2), sum)))/colSums(apply(abs(w.space$z), c(1, 2), sum))
+mat <- (b.space) %o% (b.time)
+par(mar=c(4,4.3,2,0.75), fig=c(0,1,0.4,1))
+image(1:600,1:400, t(data.mat), col=pal, xlab='', ylab='', axes = F); box(col='black')
+title(xlab = 'Time', ylab = 'Space', cex.lab = 1.5, font = 2, line = 2.5) 
+#
+axis(1,  c(1,100,200,300,400,500,600) ) ; axis(2, c(1,100,200,300,400), las = 2)
+par(mar=c(4,1,1.5,0.75), fig=c(0,0.2,0,0.4), new=T)
+plot(b.time, w.time$y, log='y', type = 'l', lwd=2, yaxs = 'i',xaxs='i', xlim = c(0,1), xlab = '', ylab = '', axes = F)
+axis(1, c(0,0.5,1), labels = Vectorize(formatC)(c(0.0,0.5,1.0), digits=c(0,1,0)) )
+title(xlab = expression(b[Time]), ylab = '', cex.lab = 1.5, font = 2, line = 3) 
+#
+par(mar=c(4,1,1.5,0.75), fig=c(0.2,0.4,0,0.4), new=T)
+plot(b.space, w.space$y, log='y', type = 'l', lwd=2, yaxs = 'i',xaxs='i', xlim = c(0,1), xlab = '', ylab = '', axes = F)
+axis(1, c(0,0.5,1), labels = Vectorize(formatC)(c(0.0,0.5,1.0), digits=c(0,1,0)) )
+title(xlab = expression(b[Space]), ylab = '', cex.lab = 1.5, font = 2, line = 3)
+#
+par(mar=c(4,4.5,1.5,0.75), fig=c(0.4,1,0,0.4), new=T)
+image(w.time$y, w.space$y, t(mat), xlab = '', ylab = '', col=pal, log='xy', axes = F); box(col='black')
+axis(1, c(2,5,15,60,240) ) ; axis(2, c(2,10,40,160), las = 2)
+title(xlab = expression(b[Time]), ylab = expression(b[Space]), cex.lab = 1.5, font = 2, line = 2.5)
+```
+
+Compared with the continuous numerical data, 0-1 (the presence-absence) data are also a common type in ecological research, and so we conducted an extensive test on it. The results show that the intrinsic space-time scale can be detected well for this type of data, and the structural features on a particular scale can also be correctly identified.
+
+```{r, echo=FALSE, fig.width=8, fig.height=10, out.width='70%'}
+times<-1:600; spaces <- 1:400
+set.seed(1234)
+raw.mat1 <- raw.mat11 <- matrix(NA, nrow = length(spaces), ncol=length(times))
+raw.mat2 <- raw.mat22 <- matrix(NA, nrow = length(times), ncol=length(times))
+for(j in 1:(length(times))){
+  raw.mat1[,j] <- sin(10*pi*seq(0,2,length.out = length(spaces))+ 
+                        circular::rvonmises(length(spaces), circular::circular(0), 5))
+  raw.mat11[,j] <- sin(40*pi*seq(0,2,length.out = length(spaces))+
+                         circular::rvonmises(length(spaces), circular::circular(0), 5))
+  raw.mat2[j,] <- sin(10*pi*seq(0,2,length.out = length(times))+ 
+                        circular::rvonmises(length(times), circular::circular(0), 5))
+  raw.mat22[j,] <- sin(40*pi*seq(0,2,length.out = length(times))+ 
+                         circular::rvonmises(length(times), circular::circular(0), 5))
+}
+data.mat <- rbind( cbind((raw.mat11[1:200,1:300] + raw.mat22[1:200,1:300]) , 
+                         (raw.mat11[1:200,301:600] + raw.mat2[1:200,301:600]) ),
+                   cbind((raw.mat1[201:400,1:300] + raw.mat22[201:400,1:300]) , 
+                         (raw.mat1[201:400,301:600] + raw.mat2[201:400,301:600]) ) )
+rm(.Random.seed) ; zero.index <- sample(1:(600*400), (600*400)*95/100 )
+data.mat[zero.index] <- 0
+#
+w.time <- multi.wt(times, t(data.mat)) ; w.space <- multi.wt(spaces, data.mat)
+b.time <- colSums(abs(apply(w.time$z, c(1, 2), sum)))/colSums(apply(abs(w.time$z), c(1, 2), sum))
+b.space <- colSums(abs(apply(w.space$z, c(1, 2), sum)))/colSums(apply(abs(w.space$z), c(1, 2), sum))
+mat <- (b.space) %o% (b.time)
+par(mar=c(4,4.3,2,0.75), fig=c(0,1,0.4,1))
+image(1:600,1:400, t(data.mat), col=pal, xlab='', ylab='', axes = F); box(col='black')
+title(xlab = 'Time', ylab = 'Space', cex.lab = 1.5, font = 2, line = 2.5) 
+#
+axis(1,  c(1,100,200,300,400,500,600) ) ; axis(2, c(1,100,200,300,400), las = 2)
+par(mar=c(4,1,1.5,0.75), fig=c(0,0.2,0,0.4), new=T)
+plot(b.time, w.time$y, log='y', type = 'l', lwd=2, yaxs = 'i',xaxs='i', xlim = c(0,1), xlab = '', ylab = '', axes = F)
+axis(1, c(0,0.5,1), labels = Vectorize(formatC)(c(0.0,0.5,1.0), digits=c(0,1,0)) )
+title(xlab = expression(b[Time]), ylab = '', cex.lab = 1.5, font = 2, line = 3) 
+#
+par(mar=c(4,1,1.5,0.75), fig=c(0.2,0.4,0,0.4), new=T)
+plot(b.space, w.space$y, log='y', type = 'l', lwd=2, yaxs = 'i',xaxs='i', xlim = c(0,1), xlab = '', ylab = '', axes = F)
+axis(1, c(0,0.5,1), labels = Vectorize(formatC)(c(0.0,0.5,1.0), digits=c(0,1,0)) )
+title(xlab = expression(b[Space]), ylab = '', cex.lab = 1.5, font = 2, line = 3)
+#
+par(mar=c(4,4.5,1.5,0.75), fig=c(0.4,1,0,0.4), new=T)
+image(w.time$y, w.space$y, t(mat), xlab = '', ylab = '', col=pal, log='xy', axes = F); box(col='black')
+axis(1, c(2,5,15,60,240) ) ; axis(2, c(2,10,40,160), las = 2)
+title(xlab = expression(b[Time]), ylab = expression(b[Space]), cex.lab = 1.5, font = 2, line = 2.5)
+```
+
+Taking into account the uncontrollable missing values that may exist in the process of data collection, especially the difficulty of manually monitoring and collecting a large amount of spatial-temporal data, we also verified the influence of the ratio of the missing values based on the four simulated time and space scale combinations above. The results demonstrate that, in this case, even if the proportion of missing values in the tested data set rises to 95% (random replace), the scale features of the structure can still be detected, although the intensity is not obvious on the selected scale, while the synchrony of the dynamics has a low tolerance for missing values (about 35%).
+
+```{r, echo=FALSE, fig.width=8, fig.height=10, out.width='70%'}
+times<-1:600; spaces <- 1:400
+set.seed(1234)
+raw.mat1 <- raw.mat11 <- matrix(NA, nrow = length(spaces), ncol=length(times))
+raw.mat2 <- raw.mat22 <- matrix(NA, nrow = length(times), ncol=length(times))
+for(j in 1:(length(times))){
+  raw.mat1[,j] <- sin(10*pi*seq(0,2,length.out = length(spaces))+
+                        circular::rvonmises(length(spaces), circular::circular(0), 5))
+  raw.mat11[,j] <- sin(40*pi*seq(0,2,length.out = length(spaces))+
+                         circular::rvonmises(length(spaces), circular::circular(0), 5))
+  raw.mat2[j,] <- sin(10*pi*seq(0,2,length.out = length(times))+ 
+                        circular::rvonmises(length(times), circular::circular(0), 5))
+  raw.mat22[j,] <- sin(40*pi*seq(0,2,length.out = length(times))+
+                         circular::rvonmises(length(times), circular::circular(0), 5))
+}
+rm(.Random.seed) ; error.mat <- matrix(runif(length(spaces) * length(times), -1, 1),
+                                       nrow = length(spaces), ncol=length(times))
+data.mat <- rbind( cbind((raw.mat11[1:200,1:300] + raw.mat22[1:200,1:300]) , 
+                         (raw.mat11[1:200,301:600] + raw.mat2[1:200,301:600]) ),
+                   cbind((raw.mat1[201:400,1:300] + raw.mat22[201:400,1:300]) , 
+                         (raw.mat1[201:400,301:600] + raw.mat2[201:400,301:600]) ) ) + error.mat *20
+#
+w.time <- multi.wt(times, t(data.mat)) ; w.space <- multi.wt(spaces, data.mat)
+b.time <- colSums(abs(apply(w.time$z, c(1, 2), sum)))/colSums(apply(abs(w.time$z), c(1, 2), sum))
+b.space <- colSums(abs(apply(w.space$z, c(1, 2), sum)))/colSums(apply(abs(w.space$z), c(1, 2), sum))
+mat <- (b.space) %o% (b.time)
+par(mar=c(4,4.3,2,0.75), fig=c(0,1,0.4,1))
+image(1:600,1:400, t(data.mat), col=pal, xlab='', ylab='', axes = F); box(col='black')
+title(xlab = 'Time', ylab = 'Space', cex.lab = 1.5, font = 2, line = 2.5)
+#
+axis(1,  c(1,100,200,300,400,500,600) ) ; axis(2, c(1,100,200,300,400), las = 2)
+par(mar=c(4,1,1.5,0.75), fig=c(0,0.2,0,0.4), new=T)
+plot(b.time, w.time$y, log='y', type = 'l', lwd=2, yaxs = 'i',xaxs='i', xlim = c(0,1), xlab = '', ylab = '', axes = F)
+axis(1, c(0,0.5,1), labels = Vectorize(formatC)(c(0.0,0.5,1.0), digits=c(0,1,0)) )
+title(xlab = expression(b[Time]), ylab = '', cex.lab = 1.5, font = 2, line = 3) 
+#
+par(mar=c(4,1,1.5,0.75), fig=c(0.2,0.4,0,0.4), new=T)
+plot(b.space, w.space$y, log='y', type = 'l', lwd=2, yaxs = 'i',xaxs='i', xlim = c(0,1), xlab = '', ylab = '', axes = F)
+axis(1, c(0,0.5,1), labels = Vectorize(formatC)(c(0.0,0.5,1.0), digits=c(0,1,0)) )
+title(xlab = expression(b[Space]), ylab = '', cex.lab = 1.5, font = 2, line = 3)
+#
+par(mar=c(4,4.5,1.5,0.75), fig=c(0.4,1,0,0.4), new=T)
+image(w.time$y, w.space$y, t(mat), xlab = '', ylab = '', col=pal, log='xy', axes = F); box(col='black')
+axis(1, c(2,5,15,60,240) ) ; axis(2, c(2,10,40,160), las = 2)
+title(xlab = expression(b[Time]), ylab = expression(b[Space]), cex.lab = 1.5, font = 2, line = 2.5)
+```
+
+In addition, we also performed interference verification on some error values commonly caused by system operations or artificial measurements. The results show that, in this example, even though the error ~ Uni (-1, 1) randomly added in the tested dataset reaches 10 times the original value range, the scale feature of the structure can still be detected correctly, though the intensity is very weak on the particular scale. However, due to the destruction of the simulation data's features on the small scale, the synchrony of the dynamics has a low tolerance to interference values (about 30% of the original value range).
+
+**In brief**, the detection of the spatial-temporal dynamic structure is more tolerant of the original data's incompleteness than the synchrony of the dynamics. It should be noted that these analyses above did not include a confidence test, and so relevant confidence intervals should be added in subsequent studies for further analysis.
+
+```{r, echo=FALSE}
+stopCluster(cl)
+```
+

@@ -1,0 +1,182 @@
+---
+title: ''
+author: ''
+output:
+  pdf_document: default
+  word_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+**Supporting Information.** Zhangqi Ding, et.al. 2022. Synthetically identify of space-time scale variations are needed in ecology research. Ecology.
+
+**Appendix S1**
+
+**R version 4.1.2**
+
+**Figure s1**. The map of the fishery regions (n = 10).
+
+```{r, echo = T, fig.width = 16, fig.height = 9}
+library(openxlsx, quietly = T) ; library(maps, quietly = T)
+pal <- colorRampPalette(c('#003366', "#0072B2", "#56B4E9", '#FFFFFF',
+                          "#E69F00", "#D55E00", '#CC3300'), bias=1)(n=200)
+#
+raw.data <- "https://raw.githubusercontent.com/dzq001/space-time/main/fishery_data.xlsx"
+sp.data <- read.xlsx(raw.data, sheet = 1)
+sp.data.mat <- as.matrix(reshape2::dcast(sp.data, AREA.CODE~year, value.var='value')[,-1])
+dat <- wsyn::cleandat(dat=as.matrix(sp.data.mat),times=1:60,clev=5)$cdat # require(wsyn)
+sp.data.mat <- t(dat); colnames(sp.data.mat) <- unique(sp.data$AREA.CODE)
+year <- unique(sp.data$year)
+angle <- seq(min(sp.data$Latitude), max(sp.data$Latitude), length.out = 60)
+# map:
+map.dat <- sp.data[!duplicated(sp.data$region), ][,4:6]
+map('world', col="darkgrey", fill=TRUE, bg="white", lwd=0.3, mar=rep(0,4), border=0, 
+    ylim=c(-90,90) , xlim = c(-190,190) )
+axis(2,at=seq(-90,90, length.out = 7), las=2, line = -3, 
+     labels = paste(c(90,60,30,0,30,60,90),c('S','S','S','','N','N','N'),''))
+points(map.dat$Longitude, map.dat$Latitude, pch = 19, cex=3, col = "#0072B2" )
+text(map.dat$Longitude, map.dat$Latitude, labels = map.dat$AREA.CODE, cex = 1.5,
+     pos=1, offset=0.75, font=2, col="black")
+```
+
+\newpage
+**Figure s2**. The normalized time series data for the fishery catches of Rajiformes at 10 FAO regions, 1955–2014 (60 years).
+
+```{r, echo = T, fig.width = 12, fig.height = 8}
+par(mfrow=c(3,4), mar=c(2,2,1,1), oma=c(3,3,0,0) )
+for( i in 1:10) {
+  plot(unique(sp.data$year), sp.data.mat[,i], ylim=c(-3,3), type = 'l',
+       yaxs='i', ylab = '', xaxt = 'n')
+  axis(1, c(1955,1965,1975,1985,1995,2005,2015) )
+  text(2003, 2.5, paste('Region -', map.dat$AREA.CODE[i]), font = 2, cex = 1.5 )
+  abline(h=0,lty='dashed',col='gray') }
+mtext('Time (year) ', side = 1, line = 1.5, cex = 1.5, outer = T)
+mtext('Clndat', side = 2, line = 1, cex = 1.5, outer = T)
+```
+
+\newpage
+**Figure s3**. Synchrony of the modified fishery catches data. (a-b) M~T~ and M~S~ are calculated using wavelet modulus ratio. The right plot in each graph indicates the change of b~T~ and b~S~, respectively.
+
+```{r, echo=FALSE, fig.width=13, fig.height=12}
+library(doParallel, quietly = TRUE) ; library(devtools, quietly = TRUE)
+cl <- makeCluster(detectCores()-1) ; registerDoParallel(cl)
+source("https://raw.githubusercontent.com/dzq001/space-time/main/wavelet-tool.R")
+#
+obj <- list(x=seq(nrow(sp.data.mat)),y=seq(ncol(sp.data.mat)),z=(sp.data.mat))
+grid.list<- list( x= seq( 1,nrow(sp.data.mat),,nrow(sp.data.mat)), 
+                  y= seq( 1,ncol(sp.data.mat),,nrow(sp.data.mat)))
+newmat <- fields::interp.surface.grid(obj, grid.list ) # require(fields)
+#
+scales <- 1:nrow(sp.data.mat)
+set.seed(123)
+raw.mat1 <- raw.mat11 <- raw.mat2 <- matrix(NA, nrow = length(scales), ncol=length(scales))
+for(i in 1:(length(scales))){
+  raw.mat1[i,] <- sin(10*pi*seq(0,2,length.out = length(scales))+ 
+                        circular::rvonmises(length(scales), circular::circular(0), 20))
+  raw.mat11[i[i%%2==0],] <- sin(4*pi*seq(0,2,length.out = length(scales))+ 
+                                  circular::rvonmises(length(scales), circular::circular(0), 20))
+  raw.mat11[i[i%%2==1],] <- sin(4*pi*seq(0,2,length.out = length(scales))+ 
+                                  circular::rvonmises(length(scales), circular::circular(pi), 20))
+  raw.mat2[,i] <- cos(circular::rvonmises(length(scales), 
+                                          circular::circular(sample(0:360,1)*pi/180), 2))
+}
+data.mat <- newmat$z + rbind(raw.mat1[1:30,] , raw.mat11[1:30,])*2 + raw.mat2
+#
+w.time <- multi.wt(scales, (data.mat))
+b.time <- colSums(abs(apply(w.time$z, c(1, 2), sum)))/
+  colSums(apply(abs(w.time$z), c(1, 2), sum))
+Mb.time <- mb.com(w.time, 'wmr')
+w.space <- multi.wt(scales, t(data.mat))
+b.space <- colSums(abs(apply(w.space$z, c(1, 2), sum)))/
+  colSums(apply(abs(w.space$z), c(1, 2), sum))
+Mb.space <- mb.com(w.space, 'wmr')
+mat.t1 <- mat.s1 <- mat.s2 <- matrix(NA, length(scales), length(scales) )
+for(i in 1:dim(w.time$z)[3]){ mat.t1[i, ] <- w.time$z[,42,i] }
+for(i in 1:dim(w.space$z)[3]){
+  mat.s1[,i ] <- w.space$z[,25,i]
+  mat.s2[,i ] <- w.space$z[,48,i] 
+}
+par(mar=c(4,4,1.5,0.75), fig=c(0,0.75,0.5,1))
+image(year, w.time$y, Mb.time, log='y', col=pal, xlab='', ylab='', axes = F); box(col='black')
+axis(1, c(1955,1965,1975,1985,1995,2005,2014) ) ; axis(2, c(2, 5, 13, 26), las = 2)
+lines(min(year) + w.time$y, w.time$y, lty = 2, lwd = 1.5, col = "black")
+lines(max(year) - w.time$y, w.time$y, lty = 2, lwd = 1.5, col = "black")
+title(xlab = 'Time (year)', ylab = 'Scale (year)', cex.lab = 1.5, font = 2, line = 2.5) #
+mtext('(a)',cex = 1.3, font = 2, line = 0.5, adj = -0.1)
+par(mar=c(4,0.5,1.5,0.75), fig=c(0.77,1,0.5,1), new=T)
+plot(b.time, w.time$y, log='y', type = 'l', lwd=2, yaxs = 'i',xaxs='i', xlim = c(0,1), xlab = '', ylab = '', axes = F)
+axis(1, c(0,0.2,0.4,0.6,0.8,1), labels = Vectorize(formatC)(c(0,0.2,0.4,0.6,0.8,1), digits=c(0,1,1,1,1,0)) )
+title(xlab = expression(b[Time]), ylab = '', cex.lab = 1.5, font = 2, line = 3) #
+par(mar=c(4,4,1.5,0.75), fig=c(0,0.75,0,0.5), new=T)
+image(angle, w.space$y, Mb.space, log='y', col=pal, xlab='', ylab='', axes = F); box(col='black')
+axis(1, c(-30,-15,0,15,30,45), labels = c('30S','15S','0','15N','30N','45N') )
+axis(2, c(3, 6, 16), las = 2)
+lines(min(angle) + w.space$y, w.space$y, lty = 2, lwd = 1.5, col = "black")
+lines(max(angle) - w.space$y, w.space$y, lty = 2, lwd = 1.5, col = "black")
+title(xlab = 'Space (°)', ylab = 'Scale (°)', cex.lab = 1.5, font = 2, line = 2.5) #
+mtext('(b)',cex = 1.3, font = 2, line = 0.5, adj = -0.1)
+par(mar=c(4,0.5,1.5,0.75), fig=c(0.77,1,0,0.5), new=T)
+plot(b.space, w.space$y, log='y', type = 'l', lwd=2, yaxs = 'i',xaxs='i', xlim = c(0,1), xlab = '', ylab = '', axes = F)
+axis(1, c(0,0.2,0.4,0.6,0.8,1), labels = Vectorize(formatC)(c(0,0.2,0.4,0.6,0.8,1), digits=c(0,1,1,1,1,0)) )
+title(xlab = expression(b[Space]), ylab = '', cex.lab = 1.5, font = 2, line = 3)
+```
+\newpage
+**Figure s4**. (a) The original normalized time series dataset. (b) The dataset after expanding the spatial dimensions. (c) The dataset of space scale variation is added after the spatial dimension is extended. (d-f) The real part of the wavelet transform coefficient on about 13-year scale (d), and on 6° (e) and 16° (f) space scales. (g-i) The modulus of the wavelet transform coefficient on about 13-year scale (g), and on 6° (h) and 16° (i) space scales.
+
+```{r, echo=FALSE, fig.width=13, fig.height=12}
+par(mfrow=c(3,3), mar=c(4,4,2,0.75))
+image(year, 1:11, (sp.data.mat), col=pal, axes = FALSE, xlab='', ylab=''); box(col='black')
+title(xlab = 'Time (year)', ylab = 'Space (region)', cex.lab = 1.5, cex.main = 1.5, font = 2, line = 2.8)
+axis(1,  c(1955,1965,1975,1985,1995,2005,2014) )
+axis(2, c(1:10), labels = unique(sp.data$region), las = 2)
+mtext('(a)',cex = 1.3, font = 2, line = 0.5, adj = -0.1)
+image(year, angle, (newmat$z), col=pal, axes = FALSE, xlab='', ylab=''); box(col='black')
+title(xlab = 'Time (year)', ylab = 'Space (°)', cex.lab = 1.5, cex.main = 1.5, font = 2, line = 2.8)
+axis(1,  c(1955,1965,1975,1985,1995,2005,2014) )
+axis(2, c(-30,-15,0,15,30,45), labels = c('30S','15S','0','15N','30N','45N'), las = 2)
+mtext('(b)',cex = 1.3, font = 2, line = 0.5, adj = -0.1)
+image(year, angle, (data.mat), col=pal, axes = FALSE, xlab='', ylab=''); box(col='black')
+title(xlab = 'Time (year)', ylab = 'Space (°)', cex.lab = 1.5, cex.main = 1.5, font = 2, line = 2.8)
+axis(1,  c(1955,1965,1975,1985,1995,2005,2014) )
+axis(2, c(-30,-15,0,15,30,45), labels = c('30S','15S','0','15N','30N','45N'), las = 2)
+mtext('(c)',cex = 1.3, font = 2, line = 0.5, adj = -0.1)
+image(year, angle, Re(t(mat.t1)), col=pal, axes = FALSE, xlab='', ylab=''); box(col='black')
+title(xlab = 'Time (year)', ylab = 'Space (°)', cex.lab = 1.5, cex.main = 1.5, font = 2, line = 2.8)
+axis(1,  c(1955,1965,1975,1985,1995,2005,2014) )
+axis(2, c(-30,-15,0,15,30,45), labels = c('30S','15S','0','15N','30N','45N'), las = 2)
+mtext('(d)',cex = 1.3, font = 2, line = 0.5, adj = -0.1)
+image(year, angle, (Re(t(mat.s1))), col=pal, axes = FALSE, xlab='', ylab=''); box(col='black')
+title(xlab = 'Time (year)', ylab = 'Space (°)', cex.lab = 1.5, cex.main = 1.5, font = 2, line = 2.8)
+axis(1,  c(1955,1965,1975,1985,1995,2005,2014) )
+axis(2, c(-30,-15,0,15,30,45), labels = c('30S','15S','0','15N','30N','45N'), las = 2)
+mtext('(e)',cex = 1.3, font = 2, line = 0.5, adj = -0.1)
+image(year, angle, (Re(t(mat.s2))), col=pal, axes = FALSE, xlab='', ylab=''); box(col='black')
+title(xlab = 'Time (year)', ylab = 'Space (°)', cex.lab = 1.5, cex.main = 1.5, font = 2, line = 2.8)
+axis(1,  c(1955,1965,1975,1985,1995,2005,2014) )
+axis(2, c(-30,-15,0,15,30,45), labels = c('30S','15S','0','15N','30N','45N'), las = 2)
+mtext('(f)',cex = 1.3, font = 2, line = 0.5, adj = -0.1)
+image(year, angle, Mod(t(mat.t1)), col=pal, axes = FALSE, xlab='', ylab=''); box(col='black')
+title(xlab = 'Time (year)', ylab = 'Space (°)', cex.lab = 1.5, cex.main = 1.5, font = 2, line = 2.8)
+axis(1,  c(1955,1965,1975,1985,1995,2005,2014) )
+axis(2, c(-30,-15,0,15,30,45), labels = c('30S','15S','0','15N','30N','45N'), las = 2)
+mtext('(g)',cex = 1.3, font = 2, line = 0.5, adj = -0.1)
+image(year, angle, (Mod(t(mat.s1))), col=pal, axes = FALSE, xlab='', ylab=''); box(col='black')
+title(xlab = 'Time (year)', ylab = 'Space (°)', cex.lab = 1.5, cex.main = 1.5, font = 2, line = 2.8)
+axis(1,  c(1955,1965,1975,1985,1995,2005,2014) )
+axis(2, c(-30,-15,0,15,30,45), labels = c('30S','15S','0','15N','30N','45N'), las = 2)
+mtext('(h)',cex = 1.3, font = 2, line = 0.5, adj = -0.1)
+image(year, angle, (Mod(t(mat.s2))), col=pal, axes = FALSE, xlab='', ylab=''); box(col='black')
+title(xlab = 'Time (year)', ylab = 'Space (°)', cex.lab = 1.5, cex.main = 1.5, font = 2, line = 2.8)
+axis(1,  c(1955,1965,1975,1985,1995,2005,2014) )
+axis(2, c(-30,-15,0,15,30,45), labels = c('30S','15S','0','15N','30N','45N'), las = 2)
+mtext('(i)',cex = 1.3, font = 2, line = 0.5, adj = -0.1)
+```
+
+```{r, echo=FALSE}
+stopCluster(cl)
+```
+
